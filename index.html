@@ -1,74 +1,58 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>福委會身分驗證2</title>
-  <!-- 引入 LINE LIFF SDK -->
+  <title>員工會員綁定系統</title>
+  <!-- 載入 LINE 官方的 LIFF SDK -->
+  <!--<script src="https://line-scdn.net"></script>-->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: #f4f6f9;
-      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: 20px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 80vh;
+      background-color: #f4f6f9;
+      color: #333;
     }
-    .card {
-      background: white;
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: #fff;
       padding: 25px;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 340px;
-      box-sizing: border-box;
-    }
-    .notice {
-      color: #de1b1b;
-      font-weight: bold;
-      text-align: center;
-      font-size: 15px;
-      margin-bottom: 20px;
-      background-color: #ffebeb;
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid #ffcccc;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     h2 {
-      color: #333;
-      font-size: 20px;
       text-align: center;
-      margin-top: 0;
+      margin-bottom: 20px;
+      color: #111;
     }
     .form-group {
       margin-bottom: 15px;
     }
     label {
       display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
       font-size: 14px;
-      color: #444;
-      margin-bottom: 6px;
-      font-weight: bold;
     }
     input {
       width: 100%;
       padding: 10px;
-      border: 1px solid #ddd;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
       border-radius: 6px;
       font-size: 16px;
-      box-sizing: border-box;
-      outline: none;
     }
     input:focus {
       border-color: #06C755;
+      outline: none;
     }
-    .btn {
+    button {
       width: 100%;
       padding: 12px;
-      background-color: #06C755;
+      background-color: #06C755; /* LINE 綠色 */
       color: white;
       border: none;
       border-radius: 6px;
@@ -77,97 +61,109 @@
       cursor: pointer;
       margin-top: 10px;
     }
-    .btn:disabled {
-      background-color: #ccc;
+    button:hover {
+      background-color: #05b34c;
     }
-    #status-msg {
+    .loading {
       text-align: center;
       color: #666;
-      font-size: 14px;
       margin-top: 15px;
+      display: none;
     }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <!-- 1. 頂部強制提示 -->
-    <div class="notice">⚠️ 請務必在「手機 LINE」中操作</div>
-
-    <h2>員工福利驗證123</h2>
-    
-    <!-- 2. 兩個主要輸入框 -->
-    <div class="form-group">
-      <label for="empId">公司工號</label>
-      <input type="text" id="empId" placeholder="請輸入工號" required>
-    </div>
-    
-    <div class="form-group">
-      <label for="verifyCode">身分驗證碼</label>
-      <input type="text" id="verifyCode" placeholder="請輸入驗證碼" required>
-    </div>
-    
-    <button class="btn" id="submitBtn" onclick="sendVerifyData()">確認送出 ➔</button>
-    
-    <!-- 狀態顯示（除錯用） -->
-    <div id="status-msg">系統初始化中...</div>
+<div class="container">
+  <h2>員工會員開通</h2>
+  
+  <div class="form-group">
+    <label for="empId">員工工號</label>
+    <input type="text" id="empId" placeholder="例如：EMP123" autocomplete="off">
   </div>
+  
+  <div class="form-group">
+    <label for="verifyCode">驗證碼</label>
+    <input type="text" id="verifyCode" placeholder="請輸入4-6位數驗證碼" autocomplete="off">
+  </div>
+  
+  <button id="submitBtn">確認驗證並開通</button>
+  <div id="loadingText" class="loading">正在傳送安全驗證，請稍候...</div>
+</div>
 
-  <script>
-    // 🔴 請務必更換成你 LINE 後台那串 10 位數加英文的 LIFF ID 🔴
-    const MY_LIFF_ID = "2010873474-DRwAPQiW"; 
+<script>
+  // 📌 請在這裡替換成您在 LINE Developers 後台申請的 LIFF ID
+  const MY_LIFF_ID = '2010873474-DRwAPQiW';
 
-    // 初始化 LIFF
+  // 1. 初始化 LIFF SDK
+  document.addEventListener("DOMContentLoaded", function() {
     liff.init({ liffId: MY_LIFF_ID })
       .then(() => {
-        document.getElementById("status-msg").innerText = "✔ 系統準備就緒";
-        
-        // 自動檢查登入狀態
-        if (!liff.isLoggedIn()) {
-          liff.login();
+        console.log("LIFF 初始化成功");
+        // 如果使用者不是在 LINE App 內打開，進行提醒（非 client 環境無法 sendMessages）
+        if (!liff.isInClient()) {
+          alert("請務必使用手機 LINE App 內打開此網頁，否則無法完成安全綁定。");
         }
       })
       .catch((err) => {
-        // 如果初始化失敗，這裡會直接噴出原因，不用通靈除錯
-        document.getElementById("status-msg").innerText = "初始化失敗: " + err.message;
-        document.getElementById("status-msg").style.color = "red";
+        console.error("LIFF 初始化失敗:", err);
+        alert("系統載入錯誤，請重新從聊天室點擊連結。");
       });
+  });
 
-    // 按下送出按鈕
-    function sendVerifyData() {
-      const empId = document.getElementById("empId").value.trim();
-      const verifyCode = document.getElementById("verifyCode").value.trim();
-      const submitBtn = document.getElementById("submitBtn");
+  // 2. 監聽送出按鈕
+  document.getElementById('submitBtn').addEventListener('click', function() {
+    const empId = document.getElementById('empId').value.trim();
+    const verifyCode = document.getElementById('verifyCode').value.trim();
 
-      if (!empId || !verifyCode) {
-        alert("請輸入完整的工號與驗證碼！");
-        return;
-      }
+    // 防呆驗證
+    if (!empId || !verifyCode) {
+      alert('請務必填寫「工號」與「驗證碼」！');
+      return;
+    }
 
-      submitBtn.disabled = true;
-      submitBtn.innerText = "傳送中...";
+    const submitBtn = document.getElementById('submitBtn');
+    const loadingText = document.getElementById('loadingText');
 
-      // 3. 呼叫 LINE 自動回覆符合你格式的範例字串
+    // 停用按鈕防止重複點擊
+    submitBtn.disabled = true;
+    submitBtn.style.backgroundColor = '#ccc';
+    loadingText.style.display = 'block';
+
+    // 3. 檢查環境並執行隱形發送
+    if (liff.isInClient()) {
+      
+      // 🚀 使用您剛學到的 Template Literals (反單引號 ``)，優雅地組合隱形指令字串
+      const secretPayload = `action=bind_member&id=${empId}&code=${verifyCode}`;
+
       liff.sendMessages([
         {
-          type: "text",
-          text: `[驗證]工號:${empId},驗證碼:${verifyCode}`
+          "type": "text",
+          "text": secretPayload
         }
       ])
-      .then(() => {
-        document.getElementById("status-msg").innerText = "✔ 驗證指令已送出！";
-        // 成功發送後，立刻自動關閉網頁視窗
-        setTimeout(() => {
-          liff.closeWindow();
-        }, 300);
+      .then(function () {
+        console.log("隱形資料拋送成功！");
+        // 資料一旦送出，立刻幫用戶把網頁視窗關閉，保持聊天室完全乾淨
+        liff.closeWindow(); 
       })
-      .catch((err) => {
-        alert("傳送失敗！請確認是否在手機 LINE 內打開，並允許傳送訊息權限。");
-        document.getElementById("status-msg").innerText = "傳送失敗: " + err.message;
+      .catch(function (error) {
+        // 如果失敗，還原按鈕狀態供使用者重新嘗試
         submitBtn.disabled = false;
-        submitBtn.innerText = "確認送出 ➔";
+        submitBtn.style.backgroundColor = '#06C755';
+        loadingText.style.display = 'none';
+        
+        alert('安全通道建立失敗：' + error.message + '\n請確認您在 LINE 官方後台是否忘記勾選 chat_message.write 權限！');
       });
+
+    } else {
+      alert('無法在外部瀏覽器送出資料！請在 LINE 聊天室內重新點開網頁。');
+      submitBtn.disabled = false;
+      submitBtn.style.backgroundColor = '#06C755';
+      loadingText.style.display = 'none';
     }
-  </script>
+  });
+</script>
+
 </body>
 </html>
