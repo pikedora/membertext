@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>福委會員工福利驗證</title>
+  <title>福委會身分驗證</title>
   <!-- 引入 LINE LIFF SDK -->
   <script src="https://line-scdn.net"></script>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       background-color: #f4f6f9;
       margin: 0;
       padding: 20px;
@@ -19,41 +19,45 @@
     }
     .card {
       background: white;
-      padding: 30px;
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
       width: 100%;
-      max-width: 360px;
+      max-width: 340px;
       box-sizing: border-box;
+    }
+    .notice {
+      color: #de1b1b;
+      font-weight: bold;
+      text-align: center;
+      font-size: 15px;
+      margin-bottom: 20px;
+      background-color: #ffebeb;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ffcccc;
     }
     h2 {
       color: #333;
+      font-size: 20px;
+      text-align: center;
       margin-top: 0;
-      font-size: 22px;
-      text-align: center;
-    }
-    p {
-      color: #666;
-      font-size: 14px;
-      line-height: 1.5;
-      text-align: center;
-      margin-bottom: 25px;
     }
     .form-group {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
     label {
       display: block;
       font-size: 14px;
       color: #444;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       font-weight: bold;
     }
     input {
       width: 100%;
-      padding: 12px;
+      padding: 10px;
       border: 1px solid #ddd;
-      border-radius: 8px;
+      border-radius: 6px;
       font-size: 16px;
       box-sizing: border-box;
       outline: none;
@@ -63,11 +67,11 @@
     }
     .btn {
       width: 100%;
-      padding: 14px;
+      padding: 12px;
       background-color: #06C755;
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
@@ -76,116 +80,92 @@
     .btn:disabled {
       background-color: #ccc;
     }
-    /* 錯誤與提示畫面 */
-    .error-view {
-      display: none;
+    #status-msg {
       text-align: center;
-    }
-    .error-msg {
-      color: #de1b1b;
-      font-weight: bold;
-      margin-bottom: 15px;
-    }
-    #loading {
-      text-align: center;
-      color: #999;
+      color: #666;
+      font-size: 14px;
+      margin-top: 15px;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <!-- 載入中狀態 -->
-    <div id="loading">載入系統中，請稍候...</div>
+    <!-- 1. 頂部強制提示 -->
+    <div class="notice">⚠️ 請務必在「手機 LINE」中操作</div>
 
-    <!-- 電腦版阻擋畫面 -->
-    <div id="pc-error" class="error-view">
-      <p class="error-msg">⚠️ 偵測到您使用電腦版 LINE</p>
-      <p>為了確保驗證機制安全，請改用<b>手機 LINE</b> 點擊圖文選單按鈕進行身份綁定。</p>
+    <h2>員工福利驗證</h2>
+    
+    <!-- 2. 兩個主要輸入框 -->
+    <div class="form-group">
+      <label for="empId">公司工號</label>
+      <input type="text" id="empId" placeholder="請輸入工號" required>
     </div>
-
-    <!-- 主要輸入表單 -->
-    <div id="form-view" style="display: none;">
-      <h2>員工福利啟用</h2>
-      <p>歡迎！請輸入您的在職工號與姓名。系統比對正確後將自動開通您的「數位會員卡」。</p>
-      
-      <div class="form-group">
-        <label for="empId">公司工號</label>
-        <input type="text" id="empId" placeholder="例如: 10045" required>
-      </div>
-      
-      <div class="form-group">
-        <label for="empName">員工姓名</label>
-        <input type="text" id="empName" placeholder="例如: 王大明" required>
-      </div>
-      
-      <button class="btn" id="submitBtn" onclick="sendVerifyData()">送出驗證 ➔</button>
+    
+    <div class="form-group">
+      <label for="verifyCode">身分驗證碼</label>
+      <input type="text" id="verifyCode" placeholder="請輸入驗證碼" required>
     </div>
+    
+    <button class="btn" id="submitBtn" onclick="sendVerifyData()">確認送出 ➔</button>
+    
+    <!-- 狀態顯示（除錯用） -->
+    <div id="status-msg">系統初始化中...</div>
   </div>
 
   <script>
-    // 🔴 請在這裡填入你在 LINE Developer 後台申请的 LIFF ID 🔴
+    // 🔴 請務必更換成你 LINE 後台那串 10 位數加英文的 LIFF ID 🔴
     const MY_LIFF_ID = "你的_LIFF_ID"; 
 
     // 初始化 LIFF
-    document.addEventListener("DOMContentLoaded", function() {
-      liff.init({ liffId: MY_LIFF_ID })
-        .then(() => {
-          document.getElementById("loading").style.display = "none";
-          
-          // 1. 防呆檢查：判斷是否在 LINE 內建瀏覽器（手機版環境）打開
-          if (!liff.isInClient()) {
-            // 如果是在電腦版、或是外面一般瀏覽器打開，直接阻擋
-            document.getElementById("pc-error").style.display = "block";
-            return;
-          }
+    liff.init({ liffId: MY_LIFF_ID })
+      .then(() => {
+        document.getElementById("status-msg").innerText = "✔ 系統準備就緒";
+        
+        // 自動檢查登入狀態
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        }
+      })
+      .catch((err) => {
+        // 如果初始化失敗，這裡會直接噴出原因，不用通靈除錯
+        document.getElementById("status-msg").innerText = "初始化失敗: " + err.message;
+        document.getElementById("status-msg").style.color = "red";
+      });
 
-          // 2. 確保使用者已登入
-          if (!liff.isLoggedIn()) {
-            liff.login();
-          } else {
-            // 環境正常，顯示表單
-            document.getElementById("form-view").style.display = "block";
-          }
-        })
-        .catch((err) => {
-          document.getElementById("loading").innerText = "系統初始化失敗，請關閉後重新整理。";
-          console.error(err);
-        });
-    });
-
-    // 按下送出按鈕的執行函式
+    // 按下送出按鈕
     function sendVerifyData() {
       const empId = document.getElementById("empId").value.trim();
-      const empName = document.getElementById("empName").value.trim();
+      const verifyCode = document.getElementById("verifyCode").value.trim();
       const submitBtn = document.getElementById("submitBtn");
 
-      if (!empId || !empName) {
-        alert("請完整填寫工號與姓名！");
+      if (!empId || !verifyCode) {
+        alert("請輸入完整的工號與驗證碼！");
         return;
       }
 
-      // 停用按鈕，防止重複點擊
       submitBtn.disabled = true;
       submitBtn.innerText = "傳送中...";
 
-      // 3. 核心安全指令：呼叫 LINE SDK 幫員工發送私密驗證指令回聊天室
-      // 這裡的字串格式要跟下一題的 GAS 互相對應
+      // 3. 呼叫 LINE 自動回覆符合你格式的範例字串
       liff.sendMessages([
         {
           type: "text",
-          text: `[福委會驗證指令]工號:${empId},姓名:${empName}`
+          text: `[驗證]工號:${empId},驗證碼:${verifyCode}`
         }
       ])
       .then(() => {
-        // 傳送成功後，網頁「立刻自動關閉」，員工體驗極佳
-        liff.closeWindow();
+        document.getElementById("status-msg").innerText = "✔ 驗證指令已送出！";
+        // 成功發送後，立刻自動關閉網頁視窗
+        setTimeout(() => {
+          liff.closeWindow();
+        }, 300);
       })
       .catch((err) => {
-        alert("驗證傳送失敗，請確認是否允許 LINE 傳送訊息權限。");
+        alert("傳送失敗！請確認是否在手機 LINE 內打開，並允許傳送訊息權限。");
+        document.getElementById("status-msg").innerText = "傳送失敗: " + err.message;
         submitBtn.disabled = false;
-        submitBtn.innerText = "送出驗證 ➔";
-        console.error(err);
+        submitBtn.innerText = "確認送出 ➔";
       });
     }
   </script>
