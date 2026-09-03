@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>福委會身分驗證2</title>
+  <!-- 引入 LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 80vh;
+    }
+    .card {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 340px;
+      box-sizing: border-box;
+    }
+    .notice {
+      color: #de1b1b;
+      font-weight: bold;
+      text-align: center;
+      font-size: 15px;
+      margin-bottom: 20px;
+      background-color: #ffebeb;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ffcccc;
+    }
+    h2 {
+      color: #333;
+      font-size: 20px;
+      text-align: center;
+      margin-top: 0;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+      box-sizing: border-box;
+      outline: none;
+    }
+    input:focus {
+      border-color: #06C755;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background-color: #06C755;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn:disabled {
+      background-color: #ccc;
+    }
+    #status-msg {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <!-- 1. 頂部強制提示 -->
+    <div class="notice">⚠️ 請務必在「手機 LINE」中操作</div>
+
+    <h2>員工福利驗證123</h2>
+    
+    <!-- 2. 兩個主要輸入框 -->
+    <div class="form-group">
+      <label for="empId">公司工號</label>
+      <input type="text" id="empId" placeholder="請輸入工號" required>
+    </div>
+    
+    <div class="form-group">
+      <label for="verifyCode">身分驗證碼</label>
+      <input type="text" id="verifyCode" placeholder="請輸入驗證碼" required>
+    </div>
+    
+    <button class="btn" id="submitBtn" onclick="sendVerifyData()">確認送出 ➔</button>
+    
+    <!-- 狀態顯示（除錯用） -->
+    <div id="status-msg">系統初始化中...</div>
+  </div>
+
+  <script>
+    // 🔴 請務必更換成你 LINE 後台那串 10 位數加英文的 LIFF ID 🔴
+    const MY_LIFF_ID = "2010873474-DRwAPQiW"; 
+
+    // 初始化 LIFF
+    liff.init({ liffId: MY_LIFF_ID })
+      .then(() => {
+        document.getElementById("status-msg").innerText = "✔ 系統準備就緒";
+        
+        // 自動檢查登入狀態
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        }
+      })
+      .catch((err) => {
+        // 如果初始化失敗，這裡會直接噴出原因，不用通靈除錯
+        document.getElementById("status-msg").innerText = "初始化失敗: " + err.message;
+        document.getElementById("status-msg").style.color = "red";
+      });
+
+    // 按下送出按鈕
+    function sendVerifyData() {
+      const empId = document.getElementById("empId").value.trim();
+      const verifyCode = document.getElementById("verifyCode").value.trim();
+      const submitBtn = document.getElementById("submitBtn");
+
+      if (!empId || !verifyCode) {
+        alert("請輸入完整的工號與驗證碼！");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "傳送中...";
+
+      // 3. 呼叫 LINE 自動回覆符合你格式的範例字串
+      liff.sendMessages([
+        {
+          type: "text",
+          text: `[驗證]工號:${empId},驗證碼:${verifyCode}`
+        }
+      ])
+      .then(() => {
+        document.getElementById("status-msg").innerText = "✔ 驗證指令已送出！";
+        // 成功發送後，立刻自動關閉網頁視窗
+        setTimeout(() => {
+          liff.closeWindow();
+        }, 300);
+      })
+      .catch((err) => {
+        alert("傳送失敗！請確認是否在手機 LINE 內打開，並允許傳送訊息權限。");
+        document.getElementById("status-msg").innerText = "傳送失敗: " + err.message;
+        submitBtn.disabled = false;
+        submitBtn.innerText = "確認送出 ➔";
+      });
+    }
+  </script>
+</body>
+</html>
