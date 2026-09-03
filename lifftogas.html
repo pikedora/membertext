@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>員工會員綁定系統</title>
+    <!-- 引入 LINE LIFF SDK -->
+    <script charset="utf-8" src="https://line-scdn.net"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 400px; box-sizing: border-box; text-align: center; }
+        h2 { color: #333; margin-bottom: 8px; font-size: 22px; }
+        p { color: #666; font-size: 14px; margin-bottom: 24px; line-height: 1.4; }
+        .form-group { text-align: left; margin-bottom: 18px; }
+        label { display: block; font-size: 14px; color: #444; margin-bottom: 6px; font-weight: 600; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border-color 0.2s; }
+        input:focus { border-color: #06C755; outline: none; }
+        .btn { background-color: #06C755; color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; margin-top: 10px; }
+        .btn:hover { background-color: #05b34b; }
+        .btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+        #loadingView { display: block; color: #666; }
+        #formView { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <!-- 載入中畫面 -->
+        <div id="loadingView">
+            <h3>🔄 安全環境檢查中...</h3>
+            <p>請稍候，正在驗證您的 LINE 身分身份。</p>
+        </div>
+
+        <!-- 核心輸入表單 -->
+        <div id="formView">
+            <h2>會員身份綁定</h2>
+            <p>請輸入您的員工工號與簡訊驗證碼以完成綁定。</p>
+            
+            <div class="form-group">
+                <label for="empId">員工工號</label>
+                <input type="text" id="empId" placeholder="例如：A12345" autocomplete="off">
+            </div>
+            
+            <div class="form-group">
+                <label for="otp">驗證碼</label>
+                <input type="tel" id="otp" placeholder="請輸入 4 位數驗證碼" maxlength="4" autocomplete="off">
+            </div>
+            
+            <button class="btn" id="submitBtn" onclick="submitData()">確認送出</button>
+        </div>
+    </div>
+
+<script>
+    // 💡 填入您的設定資料
+    const MY_LIFF_ID = "您的_LIFF_ID_填在這裡"; 
+    const TARGET_OA_ID = "@您的官方帳號ID_填在這裡"; // 必須包含 @，例如 @my_company_oa
+    const GAS_WEB_APP_URL = "您的_GAS_WEB_APP_網址_填在這裡";
+
+    let userLineId = "";
+    let userIdToken = "";
+
+    // 網頁開啟時，自動初始化 LIFF
+    window.onload = function() {
+        initializeLiff();
+    };
+
+    function initializeLiff() {
+        liff.init({ liffId: MY_LIFF_ID })
+            .then(() => {
+                // 檢查使用者是否已登入 LINE
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                } else {
+                    checkSecurityContext();
+                }
+            })
+            .catch((err) => {
+                alert("LIFF 初始化失敗，請重新從官方帳號開啟。");
+                console.error(err);
+            });
+    }
+
+    // 🛡️ 安全防線：抽查當前開啟環境
+    function checkSecurityContext() {
+        const context = liff.getContext();
+        
+        // 防線 1：檢查當前所在的官方帳號是否正確（防止跨帳號流傳）
+        if (!context || context.officialAccountId !== TARGET_OA_ID) {
+            alert("❌ 非法存取：此網頁不支援當前官方帳號，系統將自動關閉。");
+            liff.closeWindow();
+            return;
+        }
+
+        // 取得安全的 Token 與 ID 供後端比對
+        userIdToken = liff.getIDToken(); 
+        userLineId = context.userId;
+
+        // 檢查防線 2：先打給 GAS 檢查這個 LINE ID 是否已經綁定過（防重複開啟）
+        checkBindingStatus();
+    }
+
+    // 向 GAS 檢查是否已綁定
+    function checkBindingStatus() {
+        fetch(`${GAS_WEB_APP_URL}?action=checkStatus&userId=${userLineId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.isBound) {
+                    alert("您先前已成功完成綁定，不需重複驗證！");
+                    liff.closeWindow(); // 已經綁定的人，網頁自動自殺關閉
+                } else {
+                    // 通過所有安全檢查，才將「載入中」切換成「輸入表單」給一般人看
+                    document.getElementById("loadingView").style.display = "none";
+                    document.getElementById("formView").style.display = "block";
+                }
+            })
+            .catch(err => {
+                alert("伺服器連線失敗，請稍後再試。");
+            });
+    }
+
+    // 按下送出按鈕
+    function submitData() {
+        const empId = document.getElementById("empId").value.trim();
+        const otp = document.getElementById("otp").value.trim();
+        const submitBtn = document.getElementById("submitBtn");
+
+        if (!empId || !otp) {
+            alert("請填寫完整的工號與驗證碼！");
+            return;
+        }
+
+        // 鎖定按鈕防止重複點擊
+        submitBtn.disabled = true;
+        submitBtn.innerText = "驗證中...";
+
+        // 封包打包，包含加密的 idToken 與當前所在的 OA ID 丟給後端 GAS
+        const payload = {
+            action: "bindUser",
+            empId: empId,
+            otp: otp,
+            lineUserId: userLineId,
+            idToken: userIdToken,
+            currentOA: TARGET_OA_ID
+        };
+
+        // 發送 POST 請求給 GAS
+        fetch(GAS_WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                alert("🎉 身份驗證成功！即將為您升級圖文選單。");
+                liff.closeWindow(); // 成功後自動關閉網頁
+            } else {
+                alert("❌ 驗證失敗：" + data.msg);
+                submitBtn.disabled = false;
+                submitBtn.innerText = "確認送出";
+            }
+        })
+        .catch(err => {
+            alert("系統錯誤，請稍後再試。");
+            submitBtn.disabled = false;
+            submitBtn.innerText = "確認送出";
+        });
+    }
+</script>
+</body>
+</html>
